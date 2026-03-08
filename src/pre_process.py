@@ -1,8 +1,11 @@
 import re
+import os
 import pandas as pd
 
-DATA_PATH = "../data/UpdatedResumeDataSet.csv"
-OUT_PATH = "../data/resumes_clean.csv"
+# Robust paths (works no matter where you run the script from)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_PATH = os.path.join(BASE_DIR, "data", "UpdatedResumeDataSet.csv")
+OUT_PATH  = os.path.join(BASE_DIR, "data", "resumes_clean.csv")
 
 def clean_text(text: str) -> str:
     if not isinstance(text, str):
@@ -21,11 +24,19 @@ def clean_text(text: str) -> str:
     return text
 
 def main():
+    if not os.path.exists(DATA_PATH):
+        raise FileNotFoundError(
+            f"Could not find dataset at:\n{DATA_PATH}\n"
+            "Make sure the file is inside the project's 'data' folder."
+        )
+
     df = pd.read_csv(DATA_PATH)
 
     required_cols = {"Category", "Resume"}
     if not required_cols.issubset(df.columns):
-        raise ValueError(f"Dataset must contain columns {required_cols}. Found: {set(df.columns)}")
+        raise ValueError(
+            f"Dataset must contain columns {required_cols}. Found: {set(df.columns)}"
+        )
 
     print("Raw rows:", len(df))
 
@@ -41,7 +52,8 @@ def main():
     df = df[df["Resume_clean"].str.len() >= 20].copy()
     print("After len>=20:", len(df), "(removed", before_len - len(df), ")")
 
-    # Save
+    # Ensure output folder exists, then save
+    os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
     df[["Category", "Resume_clean"]].to_csv(OUT_PATH, index=False)
 
     print("\n✅ Preprocessing complete!")

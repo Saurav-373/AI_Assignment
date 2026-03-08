@@ -6,8 +6,16 @@ from sklearn.metrics import accuracy_score
 import joblib
 import os
 
+# ===== Robust Paths (Never Breaks) =====
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_PATH = os.path.join(BASE_DIR, "data", "resumes_clean.csv")
+MODEL_DIR = os.path.join(BASE_DIR, "models")
+
 # Load cleaned dataset
-df = pd.read_csv("../data/resumes_clean.csv")
+if not os.path.exists(DATA_PATH):
+    raise FileNotFoundError(f"Dataset not found at:\n{DATA_PATH}")
+
+df = pd.read_csv(DATA_PATH)
 
 print("Dataset loaded successfully")
 print("Total resumes:", len(df))
@@ -47,15 +55,14 @@ print("Model training complete")
 
 # Test model
 y_pred = model.predict(X_test_vec)
-
 accuracy = accuracy_score(y_test, y_pred)
 
 print("\nModel Accuracy:", accuracy)
 
 # Save model
-os.makedirs("../models", exist_ok=True)
+os.makedirs(MODEL_DIR, exist_ok=True)
 
-joblib.dump(model, "../models/model.pkl")
-joblib.dump(vectorizer, "../models/vectorizer.pkl")
+joblib.dump(model, os.path.join(MODEL_DIR, "model.pkl"))
+joblib.dump(vectorizer, os.path.join(MODEL_DIR, "vectorizer.pkl"))
 
 print("Model saved successfully in models folder")

@@ -10,9 +10,21 @@ from datetime import datetime
 import joblib
 import numpy as np
 
+# ==================== ROBUST PATHS (NEVER BREAK) ====================
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODEL_PATH = os.path.join(BASE_DIR, "models", "model.pkl")
+VEC_PATH = os.path.join(BASE_DIR, "models", "vectorizer.pkl")
+OUT_DIR = os.path.join(BASE_DIR, "outputs")
+
 # -------------------- LOAD MODEL --------------------
-model = joblib.load("../models/model.pkl")
-vectorizer = joblib.load("../models/vectorizer.pkl")
+if not os.path.exists(MODEL_PATH):
+    raise FileNotFoundError(f"Missing model file:\n{MODEL_PATH}\nRun train.py first.")
+
+if not os.path.exists(VEC_PATH):
+    raise FileNotFoundError(f"Missing vectorizer file:\n{VEC_PATH}\nRun train.py first.")
+
+model = joblib.load(MODEL_PATH)
+vectorizer = joblib.load(VEC_PATH)
 
 # -------------------- TEXT NORMALIZATION --------------------
 STOPWORDS = {
@@ -180,7 +192,6 @@ ROLE_SKILLS = {
     },
 }
 
-# ✅ Role groups are separate (NO CRASH)
 ROLE_GROUPS = {
     "Web & Software": {
         "web developer", "frontend developer", "backend developer", "full stack developer",
@@ -217,7 +228,6 @@ def top_predictions(resume_text: str, top_k: int = 3):
 def weighted_role_score(resume_tokens: set, role: str):
     role_obj = ROLE_SKILLS.get(role)
 
-    # safety guard
     if not isinstance(role_obj, dict) or "core" not in role_obj or "optional" not in role_obj:
         return {
             "role": role, "score": 0.0,
@@ -237,7 +247,6 @@ def weighted_role_score(resume_tokens: set, role: str):
     core_score = (len(core_matched) / len(core)) * 100 if core else 0.0
     opt_score = (len(opt_matched) / len(opt)) * 100 if opt else 0.0
 
-    # core weighted higher
     score = 0.7 * core_score + 0.3 * opt_score
 
     return {
@@ -260,7 +269,6 @@ def recommend_roles(resume_text: str, roles_to_consider=None, top_n: int = 3):
 def final_decision(ml_conf: float, ats_score: float, resume_text: str):
     wc = len(normalize(resume_text).split())
 
-    # Short skill list → ATS dominates
     if wc <= 25:
         final_score = 0.9 * ats_score + 0.1 * ml_conf
     else:
@@ -275,7 +283,7 @@ def final_decision(ml_conf: float, ats_score: float, resume_text: str):
 
     return final_score, decision
 
-# -------------------- OUTPUT (SIMPLE + OPTIONAL DETAILS) --------------------
+# -------------------- OUTPUT --------------------
 def label_for_score(score: float) -> str:
     if score >= 70:
         return "Ready"
@@ -311,9 +319,8 @@ def print_details(target_result):
 
 # -------------------- CSV LOGGING --------------------
 def save_result_csv(resume_text, target_role, decision, final_score, ats_score, ml_top1_cat, ml_top1_conf, improvements):
-    out_dir = "../outputs"
-    os.makedirs(out_dir, exist_ok=True)
-    out_path = os.path.join(out_dir, "screening_results.csv")
+    os.makedirs(OUT_DIR, exist_ok=True)
+    out_path = os.path.join(OUT_DIR, "screening_results.csv")
 
     header = [
         "timestamp", "resume_input", "target_role",
@@ -352,16 +359,13 @@ if __name__ == "__main__":
         print("Please enter resume text/skills.")
         raise SystemExit
 
-    # 1) Role recommendations (simple + realistic)
     print_simple_recommendations(resume)
 
-    # 2) ML category hint (supporting)
     ml_top3 = top_predictions(resume, top_k=3)
     print("\nML Category Hint (supporting):")
     for cat, conf in ml_top3:
         print(f"- {cat}: {conf:.2f}%")
 
-    # 3) Target screening
     job = input("\nEnter a target job title to screen (or press Enter to skip): ").strip()
 
     if normalize(job) == "list roles":
@@ -386,16 +390,14 @@ if __name__ == "__main__":
         target_result = weighted_role_score(tokenize(resume), job_n)
         print_target_simple(target_result, ml_top3, resume)
 
-        # save result
         ats_score = target_result["score"]
         ml_top1_cat, ml_top1_conf = ml_top3[0]
-        # compute final for saving
+
         final_score, decision = final_decision(ml_top1_conf, ats_score, resume)
         improvements = target_result["core_missing"][:2] if target_result["core_missing"] else target_result["opt_missing"][:2]
 
         save_result_csv(resume, job_n, decision, final_score, ats_score, ml_top1_cat, ml_top1_conf, improvements)
 
-        # optional details
         show = input("\nType 'details' to see matched/missing (or press Enter to finish): ").strip().lower()
         if show == "details":
             print_details(target_result)
